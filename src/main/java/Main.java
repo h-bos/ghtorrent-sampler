@@ -171,6 +171,7 @@ public class Main
         preparedStatement.close();
 
         writeSamplesToFile(samples);
+        printStatistics(samples);
     }
 
     static void writeSamplesToFile(List<Sample> samples)
@@ -188,7 +189,10 @@ public class Main
         {
             System.err.println(e.getMessage());
         }
+    }
 
+    static void printStatistics(List<Sample> samples)
+    {
         // Print sample statistics
         if (!samples.isEmpty())
         {
