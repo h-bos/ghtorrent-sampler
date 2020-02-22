@@ -49,7 +49,7 @@ java -jar tool.jar --lang java --nbr-of-ranges 5 --tot-nbr-of-samples 1000 --see
 ## Arguments
 
 ```
---lang <String>, the language that program filters all repositories on.
+--lang <String>, the language that ghtorrent-sampler filters all repositories on.
 --nbr-of-ranges <Int>, the number of star ranges that you want to sample from.
 --tot-nbr-of-samples <Int>, the total number of samples.
 --seed <long>, use if you want to replicate the results.
