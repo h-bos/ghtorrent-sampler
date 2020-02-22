@@ -124,7 +124,6 @@ public class Main
         int numberOfRepositoriesPerRange = numberOfRepositories / CLIArguments.numberOfRanges;
 
         // Create RNGs
-        List<Sample> samples = new ArrayList<>();
         Random rng = new Random(CLIArguments.seed);
         // We use one RNG for each sample range because we don't want the samples subarray
         // randomly picked indices to be the same for each range.
@@ -133,6 +132,8 @@ public class Main
         {
             rangeRNGs.add(new Random(rng.nextLong()));
         }
+
+        List<Sample> samples = new ArrayList<>();
 
         // This query selects samples within a range [OFFSET, OFFSET + LIMIT] for a specified language.
         preparedStatement = connection.prepareStatement(
