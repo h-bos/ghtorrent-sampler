@@ -36,7 +36,7 @@ user=myusername
 password=mypassword
 ```
 
-### Build**
+### Build
 ```
 mvn build
 ```
