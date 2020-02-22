@@ -5,24 +5,28 @@ import java.io.InputStream;
 import java.sql.*;
 import java.util.*;
 
-public class Main {
-
-    static class CLIArguments {
+public class Main
+{
+    static class CLIArguments
+    {
         String language;
         int numberOfSamples;
         int numberOfRanges;
         long seed;
 
-        static int numberOfSamplesPerRange() {
+        static int numberOfSamplesPerRange()
+        {
             return CLIArguments.numberOfSamples / CLIArguments.numberOfRanges;
         }
     }
 
-    static class Sample {
+    static class Sample
+    {
         String url;
         int numberOfStars;
 
-        Sample(String url, int numberOfStars) {
+        Sample(String url, int numberOfStars)
+        {
             this.url = url;
             this.numberOfStars = numberOfStars;
         }
@@ -30,10 +34,13 @@ public class Main {
 
     static CLIArguments CLIArguments = new CLIArguments();
 
-    public static void main(String[] args) {
+    public static void main(String[] args)
+    {
         // Simple argument parsing (I know that third party tools exist for argument parsing but I don't want to use them.)
-        for (int i = 0; i < args.length; i += 2) {
-            switch (args[i]) {
+        for (int i = 0; i < args.length; i += 2)
+        {
+            switch (args[i])
+            {
                 case "--lang":
                     CLIArguments.language = args[i+1];
                     break;
@@ -61,36 +68,48 @@ public class Main {
 
         // Find properties
         Properties properties;
-        try (InputStream input = ClassLoader.getSystemResourceAsStream("psql.properties")) {
+        try (InputStream input = ClassLoader.getSystemResourceAsStream("psql.properties"))
+        {
             properties = new Properties();
             properties.load(input);
-        } catch (FileNotFoundException e) {
+        }
+        catch (FileNotFoundException e)
+        {
             System.err.println(e.getMessage());
             return;
-        } catch (IOException e) {
+        }
+        catch (IOException e)
+        {
             System.err.println(e.getMessage());
             return;
         }
 
         // Connect to DB
         Connection connection;
-        try {
+        try
+        {
              connection = DriverManager.getConnection(properties.getProperty("url"), properties);
-        } catch (SQLException e) {
+        }
+        catch (SQLException e)
+        {
             System.err.println(e.getMessage());
             return;
         }
 
         // Sample repositories
-        try {
+        try
+        {
             sampleRepositories(connection, CLIArguments);
-        } catch (SQLException e) {
+        }
+        catch (SQLException e)
+        {
             System.err.println(e.getMessage());
         }
     }
 
-    public static void sampleRepositories(Connection connection, CLIArguments CLIArguments) throws SQLException {
-        // Find number of repositories
+    static void sampleRepositories(Connection connection, CLIArguments CLIArguments) throws SQLException
+    {
+        // Find the number of repositories
         PreparedStatement preparedStatement = connection.prepareStatement("SELECT COUNT(*) FROM project_samples WHERE language=?");
         preparedStatement.setString(1, CLIArguments.language);
         ResultSet resultSet = preparedStatement.executeQuery();
@@ -104,6 +123,7 @@ public class Main {
         int numberOfRepositoriesPerRange = numberOfRepositories / CLIArguments.numberOfRanges;
 
 
+        // Create RNGs
         List<Sample> samples = new ArrayList<>();
         Random rng = new Random(CLIArguments.seed);
         // We use one RNG for each sample range because we don't want the samples subarray
@@ -114,9 +134,11 @@ public class Main {
             rangeRNGs.add(new Random(rng.nextLong()));
         }
 
+        // This query selects samples within a range [OFFSET, OFFSET + LIMIT] for a specified language.
         preparedStatement = connection.prepareStatement(
-            "SELECT * FROM project_samples WHERE language=? ORDER BY nbr_of_stars DESC LIMIT ? OFFSET ?;"
-        );
+                "SELECT * FROM project_samples WHERE language=? ORDER BY nbr_of_stars DESC LIMIT ? OFFSET ?;");
+
+        // For each range, pick random samples from each query and put into the list of all samples.
         for (int i = 0; i < CLIArguments.numberOfRanges; i++)
         {
             System.out.println("[INFO] Looking for samples in range: "
@@ -126,6 +148,8 @@ public class Main {
                     " (MAX: " + (CLIArguments.numberOfRanges * numberOfRepositoriesPerRange) + ")"
                     // Ex output: Progress: 25%
                     + " Progress: " + (int)((double)i / (CLIArguments.numberOfRanges - 1) * 100) + "%");
+
+            // Set statement parameters (SQL injection safe just in case someone decides to use this program on a non-local server).
             preparedStatement.setString(1, CLIArguments.language);
             preparedStatement.setInt(2, numberOfRepositories);
             preparedStatement.setInt(3, numberOfRepositoriesPerRange * i);
@@ -137,29 +161,40 @@ public class Main {
             {
                 rangeSamples.add(new Sample(resultSet.getString(1), Integer.parseInt(resultSet.getString(3))));
             }
+
             // Pick random range samples and put into the samples list.
             Collections.shuffle(rangeSamples, rangeRNGs.get(i));
             samples.addAll(rangeSamples.subList(0, CLIArguments.numberOfSamplesPerRange()));
             resultSet.close();
         }
-
         preparedStatement.close();
 
+        writeSamplesToFile(samples);
+    }
+
+    static void writeSamplesToFile(List<Sample> samples)
+    {
         // Write samples to file samples.txt.
-        try (FileWriter writer = new FileWriter("samples.txt")) {
+        try (FileWriter writer = new FileWriter("samples.txt"))
+        {
             System.out.println("[INFO] Writing samples to file samples.txt.");
-            for (Sample sample : samples) {
+            for (Sample sample : samples)
+            {
                 writer.write(sample.url + "\n");
             }
-        } catch (IOException e) {
+        }
+        catch (IOException e)
+        {
             System.err.println(e.getMessage());
         }
 
         // Print sample statistics
-        if (!samples.isEmpty()) {
+        if (!samples.isEmpty())
+        {
             int max = 0;
             int min = 0;
-            for (Sample sample : samples) {
+            for (Sample sample : samples)
+            {
                 if (sample.numberOfStars < min) min = sample.numberOfStars;
                 if (sample.numberOfStars > max) max = sample.numberOfStars;
             }
