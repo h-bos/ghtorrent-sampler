@@ -90,18 +90,17 @@ public class Main {
     }
 
     public static void sampleRepositories(Connection connection, CLIArguments CLIArguments) throws SQLException {
-        Statement statement = connection.createStatement();
-
         // Find number of repositories
-        ResultSet resultSet = statement.executeQuery(
-            "SELECT COUNT(*) FROM project_samples WHERE language='"+ CLIArguments.language +"'"
-        );
+        PreparedStatement preparedStatement = connection.prepareStatement("SELECT COUNT(*) FROM project_samples WHERE language=?");
+        preparedStatement.setString(1, CLIArguments.language);
+        ResultSet resultSet = preparedStatement.executeQuery();
         int numberOfRepositories = 0;
         while (resultSet.next())
         {
             numberOfRepositories = Integer.parseInt(resultSet.getString(1));
         }
         resultSet.close();
+        preparedStatement.close();
         int numberOfRepositoriesPerRange = numberOfRepositories / CLIArguments.numberOfRanges;
 
 
@@ -115,6 +114,9 @@ public class Main {
             rangeRNGs.add(new Random(rng.nextLong()));
         }
 
+        preparedStatement = connection.prepareStatement(
+            "SELECT * FROM project_samples WHERE language=? ORDER BY nbr_of_stars DESC LIMIT ? OFFSET ?;"
+        );
         for (int i = 0; i < CLIArguments.numberOfRanges; i++)
         {
             System.out.println("[INFO] Looking for samples in range: "
@@ -124,14 +126,10 @@ public class Main {
                     " (MAX: " + (CLIArguments.numberOfRanges * numberOfRepositoriesPerRange) + ")"
                     // Ex output: Progress: 25%
                     + " Progress: " + (int)((double)i / (CLIArguments.numberOfRanges - 1) * 100) + "%");
-            resultSet = statement.executeQuery(
-                "SELECT * " +
-                "FROM project_samples " +
-                "WHERE language = '"+ CLIArguments.language +"' " +
-                "ORDER BY nbr_of_stars DESC " +
-                "LIMIT " + numberOfRepositoriesPerRange + " " +
-                "OFFSET " + numberOfRepositoriesPerRange * i + ";"
-            );
+            preparedStatement.setString(1, CLIArguments.language);
+            preparedStatement.setInt(2, numberOfRepositories);
+            preparedStatement.setInt(3, numberOfRepositoriesPerRange * i);
+            resultSet = preparedStatement.executeQuery();
 
             // Shuffle range and pick samples.
             List<Sample> rangeSamples = new ArrayList<>();
@@ -145,7 +143,7 @@ public class Main {
             resultSet.close();
         }
 
-        statement.close();
+        preparedStatement.close();
 
         // Write samples to file samples.txt.
         try (FileWriter writer = new FileWriter("samples.txt")) {
@@ -165,7 +163,7 @@ public class Main {
                 if (sample.numberOfStars < min) min = sample.numberOfStars;
                 if (sample.numberOfStars > max) max = sample.numberOfStars;
             }
-            System.out.println("\nSample statistics:)");
+            System.out.println("\nSample statistics:");
             System.out.println("* Max number of stars: " + max);
             System.out.println("* Min number of stars: " + min);
         }
