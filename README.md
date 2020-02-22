@@ -1,11 +1,13 @@
+# ghtorrent-sampler
+
 **ghtorrent-sampler** is a tool for stratified sampling of GHTorrent repositories based on their star rating. 
 
-### Requirements
+## Requirements
 
 * Java 1.8+
 * A data dump or remote connection to a GHTorrent PSQL DB
 
-### Get Started
+## Get Started
 
 **Execute the following query in the GHTorrent PSQL DB**
 
@@ -27,24 +29,24 @@ The query is stuck? Probably not, it's just large tables and a huge join.
 
 Why is this needed? This "staging" table improves the performance significantly.
 
-**Configure** `psql.properties`
+### Configure `psql.properties`
 ```
 url=jdbc:postgresql://localhost/ghtorrent_restore
 user=myusername
 password=mypassword
 ```
 
-**Build**
+### Build**
 ```
 mvn build
 ```
 
-**Run**
+### Run 
 ```
 java -jar tool.jar --lang java --nbr-of-ranges 5 --tot-nbr-of-samples 1000 --seed 1234 
 ```
 
-### Arguments
+## Arguments
 
 ```
 --lang <String>, the language that program filters all repositories on.
@@ -53,7 +55,7 @@ java -jar tool.jar --lang java --nbr-of-ranges 5 --tot-nbr-of-samples 1000 --see
 --seed <long>, use if you want to replicate the results.
 ```
 
-### Example Output
+## Example Output
 
 ```
 Running with arguments: 
