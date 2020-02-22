@@ -38,12 +38,12 @@ password=mypassword
 
 ### Build
 ```
-mvn build
+mvn package
 ```
 
-### Run 
+### Run
 ```
-java -jar tool.jar --lang java --nbr-of-ranges 5 --tot-nbr-of-samples 1000 --seed 1234 
+java -jar ghtorrent-sampler.jar --lang C++ --nbr-of-ranges 25 --tot-nbr-of-samples 1000 --seed 1234
 ```
 
 ## Arguments
