@@ -59,12 +59,13 @@ public class Main
             }
         }
 
-        System.out.println("Sampling with arguments: ");
-        System.out.println("* Language: " + CLIArguments.language);
-        System.out.println("* Number of samples: " + CLIArguments.numberOfSamples);
-        System.out.println("* Number of ranges: " + CLIArguments.numberOfRanges);
-        System.out.println("* Number of samples per range: " + CLIArguments.numberOfSamplesPerRange());
-        System.out.println("* Seed: " + CLIArguments.seed + "\n");
+        System.out.println(
+                "Sampling with arguments: \n" +
+                "* Language: "                      + CLIArguments.language + "\n" +
+                "* Number of samples: "             + CLIArguments.numberOfSamples + "\n" +
+                "* Number of ranges: "              + CLIArguments.numberOfRanges + "\n" +
+                "* Number of samples per range: "   + CLIArguments.numberOfSamplesPerRange() + "\n" +
+                "* Seed: "                          + CLIArguments.seed + "\n");
 
         // Find properties
         Properties properties;
@@ -121,7 +122,6 @@ public class Main
         resultSet.close();
         preparedStatement.close();
         int numberOfRepositoriesPerRange = numberOfRepositories / CLIArguments.numberOfRanges;
-
 
         // Create RNGs
         List<Sample> samples = new ArrayList<>();
