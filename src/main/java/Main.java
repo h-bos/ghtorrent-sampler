@@ -58,7 +58,7 @@ public class Main
 
     public static void main(String[] args)
     {
-        // Simple argument parsing (I know that third party tools exist for argument parsing but I don't want to use them.)
+        // Simple argument parsing
         for (int i = 0; i < args.length; i += 2)
         {
             switch (args[i])
@@ -150,86 +150,55 @@ public class Main
 
     static void sampleRepositories(Connection connection, CLIArguments CLIArguments) throws SQLException, IOException, InterruptedException {
         // Find the number of repositories
-        PreparedStatement preparedStatement = connection.prepareStatement("SELECT COUNT(*) FROM project_samples WHERE language=?");
+        PreparedStatement preparedStatement = connection.prepareStatement("SELECT * FROM project_samples WHERE language=? ORDER by nbr_of_stars");
         preparedStatement.setString(1, CLIArguments.language);
         ResultSet resultSet = preparedStatement.executeQuery();
         int numberOfRepositories = 0;
+        List<Sample> repositoryPopulation = new ArrayList<>();
         while (resultSet.next())
         {
-            numberOfRepositories = resultSet.getInt(1);
+            repositoryPopulation.add(new Sample(resultSet.getString(1), resultSet.getInt(3)));
+            numberOfRepositories++;
         }
+        int numberOfRepositoriesPerRange = numberOfRepositories / CLIArguments.numberOfRanges;
         resultSet.close();
         preparedStatement.close();
-        int numberOfRepositoriesPerRange = numberOfRepositories / CLIArguments.numberOfRanges;
 
-        // Create RNGs
+        // Create RNGs for each repository sample range
         Random rng = new Random(CLIArguments.seed);
-        // We use one RNG for each sample range because we don't want the samples subarray
-        // randomly picked indices to be the same for each range.
         List<Random> rangeRNGs = new ArrayList<>();
         for (int i = 0; i < CLIArguments.numberOfRanges; i++)
-        {
             rangeRNGs.add(new Random(rng.nextLong()));
-        }
 
-        List<Sample> samples = new ArrayList<>();
-
-        // This query selects samples within a range [OFFSET, OFFSET + LIMIT] for a specified language.
-        preparedStatement = connection.prepareStatement(
-                "SELECT * FROM project_samples WHERE language=? ORDER BY nbr_of_stars DESC LIMIT ? OFFSET ?;");
-
-        // For each range, pick random samples from each query and put into the list of all samples.
-        for (int i = 0; i < CLIArguments.numberOfRanges; i++)
+        List<Sample> repositorySamples = new ArrayList<>();
+        for (int rangeIndex = 0; rangeIndex < CLIArguments.numberOfRanges; rangeIndex++)
         {
-            System.out.println("[INFO] Looking for samples in range: "
-                    // Ex output: 149089-298178
-                    + numberOfRepositoriesPerRange * i + "-" + numberOfRepositoriesPerRange * (i + 1) +
-                    // Ex output: (MAX: 745445)
-                    " (MAX: " + (CLIArguments.numberOfRanges * numberOfRepositoriesPerRange) + ")");
-
-            // Set statement parameters (SQL injection safe just in case someone decides to use this program on a non-local server).
-            preparedStatement.setString(1, CLIArguments.language);
-            preparedStatement.setInt(2, numberOfRepositoriesPerRange);
-            preparedStatement.setInt(3, numberOfRepositoriesPerRange * i);
-            resultSet = preparedStatement.executeQuery();
-
-            // Shuffle range and pick samples.
-            List<Sample> rangeSamples = new ArrayList<>();
-            while(resultSet.next())
-            {
-                rangeSamples.add(new Sample(resultSet.getString(1), resultSet.getInt(3)));
-            }
-
-            // Pick random range samples and put into the samples list.
-            Collections.shuffle(rangeSamples, rangeRNGs.get(i));
-
-            List<Sample> validSamples = pickValidSamplesFromRange(rangeSamples);
-            // If sample range was exhausted
-            if (validSamples == null)
+            List<Sample> repositorySamplesFromCurrentRange = repositoryPopulation.subList(rangeIndex * numberOfRepositoriesPerRange, (rangeIndex + 1) * numberOfRepositoriesPerRange);
+            // Shuffle a given range with its RNG.
+            Collections.shuffle(repositorySamplesFromCurrentRange, rangeRNGs.get(rangeIndex));
+            // Pick repositories that exists from range
+            List<Sample> repositorySamplesFromRangeThatExist = pickExistingRepositorySamplesFromRange(repositorySamplesFromCurrentRange, CLIArguments.numberOfSamplesPerRange());
+            if (repositorySamplesFromRangeThatExist == null)
             {
                 System.out.println("[ERROR] not enough valid samples where found in range. " +
                         "Please decrease the range amount or the samples amount and try again.");
                 return;
             }
-
-            samples.addAll(validSamples);
-
-            resultSet.close();
+            repositorySamples.addAll(repositorySamplesFromRangeThatExist);
         }
-        preparedStatement.close();
 
-        calculateSamplesHash(samples);
-        writeSamplesToFile(samples);
-        writeMetaDataToFile(samples);
+        calculateSamplesHash(repositorySamples);
+        writeSamplesToFile(repositorySamples);
+        writeMetaDataToFile(repositorySamples);
     }
 
     // Some samples will return 404 from the github API because they have been deleted. To avoid adding deleted
     // repositories to the output, we check if the repositories exist before we add them to the final list of samples.
-    static List<Sample> pickValidSamplesFromRange(List<Sample> rangeSamples) throws IOException, InterruptedException {
+    static List<Sample> pickExistingRepositorySamplesFromRange(List<Sample> rangeSamples, int numberOfSamples) throws IOException, InterruptedException {
         List<Sample> validSamples = new ArrayList<>();
         int numberOfValidSamplesFound = 0;
         int sampleIndex = 0;
-        while (sampleIndex < rangeSamples.size() && numberOfValidSamplesFound < CLIArguments.numberOfSamplesPerRange())
+        while (sampleIndex < rangeSamples.size() && numberOfValidSamplesFound < numberOfSamples)
         {
             System.out.println("[INFO] Existence checking repository: " + rangeSamples.get(sampleIndex).apiUrl);
 
