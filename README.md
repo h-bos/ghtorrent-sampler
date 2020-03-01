@@ -9,7 +9,7 @@
 
 ## Get Started
 
-**Execute the following query in the GHTorrent PSQL DB**
+**Execute the following query in the GHTorrent PSQL DB (takes a while)**
 
 ```sql
 CREATE table project_samples
@@ -24,10 +24,6 @@ INNER JOIN (
 ON projects.id = watchers.repo_id 
 GROUP BY url, language, repo_id;
 ```
-
-The query is stuck? Probably not, it's just large tables and a huge join.
-
-Why is this needed? This "staging" table improves the performance significantly.
 
 ### Configure `ghtorrent-sampler.properties`
 ```
@@ -57,7 +53,8 @@ java -jar ghtorrent-sampler.jar --lang C++ --nbr-of-ranges 25 --tot-nbr-of-sampl
 The total size of all repositories when cloned can be found in the output.
 
 ```
-cat samples-{lang}.txt | xargs -n1 git clone
+# Ex. samples-java-1000.txt | xargs -n1 git clone
+cat samples-{lang}-{nbrOfSamples}.txt | xargs -n1 git clone
 ```
 
 ## Arguments
@@ -69,23 +66,24 @@ cat samples-{lang}.txt | xargs -n1 git clone
 --seed <long>, use if you want to try to replicate the results.
 ```
 
-## Replicate Samples
+## Replicate Run
 
-To replicate previous sampling: use the same  `--seed` argument and validate that the exact same repositories where found with the "Samples hash" found in the output. The hash needs to be checked because some repositories might have been deleted from GitHub since last run, which will result in different samples even if the same `--seed` argument has been used.
+Use the same  `--seed` argument and validate the "Samples hash" found in the output. 
+The hash needs to be checked because some repositories might have been deleted from GitHub since the last run.
 
 ## Example Output
 
 ```
 Sampling with arguments: 
-* Language: C++
+* Language: Java
 * Number of samples: 1000
-* Number of ranges: 10
-* Number of samples per range: 100
-* Seed: 2910
+* Number of ranges: 25
+* Number of samples per range: 40
+* Seed: 8191
 
 {...}
 
-Samples info:
+Meta:
 * Max number of stars: 1056
 * Min number of stars: 0
 * Total size of repositories if cloned: 39616.48299999995 Megabytes, 39.61648299999995 Gigabytes

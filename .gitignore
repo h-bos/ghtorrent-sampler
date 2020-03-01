@@ -118,8 +118,9 @@ hs_err_pid*
 # properties
 ghtorrent-sampler.properties
 
-# samples
-samples-*
-
 # target
 target/
+
+# samples and meta
+samples*
+meta*

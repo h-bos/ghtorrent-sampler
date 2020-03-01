@@ -32,14 +32,14 @@ public class Main
 
     static class Sample
     {
-        String ApiUrl;
+        String apiUrl;
         String cloneUrl;
 
         int numberOfStars;
 
-        Sample(String ApiUrl, int numberOfStars)
+        Sample(String apiUrl, int numberOfStars)
         {
-            this.ApiUrl = ApiUrl;
+            this.apiUrl = apiUrl;
             this.numberOfStars = numberOfStars;
         }
     }
@@ -156,7 +156,7 @@ public class Main
         int numberOfRepositories = 0;
         while (resultSet.next())
         {
-            numberOfRepositories = Integer.parseInt(resultSet.getString(1));
+            numberOfRepositories = resultSet.getInt(1);
         }
         resultSet.close();
         preparedStatement.close();
@@ -189,7 +189,7 @@ public class Main
 
             // Set statement parameters (SQL injection safe just in case someone decides to use this program on a non-local server).
             preparedStatement.setString(1, CLIArguments.language);
-            preparedStatement.setInt(2, numberOfRepositories);
+            preparedStatement.setInt(2, numberOfRepositoriesPerRange);
             preparedStatement.setInt(3, numberOfRepositoriesPerRange * i);
             resultSet = preparedStatement.executeQuery();
 
@@ -197,7 +197,7 @@ public class Main
             List<Sample> rangeSamples = new ArrayList<>();
             while(resultSet.next())
             {
-                rangeSamples.add(new Sample(resultSet.getString(1), Integer.parseInt(resultSet.getString(3))));
+                rangeSamples.add(new Sample(resultSet.getString(1), resultSet.getInt(3)));
             }
 
             // Pick random range samples and put into the samples list.
@@ -218,10 +218,9 @@ public class Main
         }
         preparedStatement.close();
 
-        writeSamplesToFile(samples);
         calculateSamplesHash(samples);
-        System.out.println("[INFO] Sampling done");
-        printSamplesInfo(samples);
+        writeSamplesToFile(samples);
+        writeMetaDataToFile(samples);
     }
 
     // Some samples will return 404 from the github API because they have been deleted. To avoid adding deleted
@@ -232,11 +231,11 @@ public class Main
         int sampleIndex = 0;
         while (sampleIndex < rangeSamples.size() && numberOfValidSamplesFound < CLIArguments.numberOfSamplesPerRange())
         {
-            System.out.println("[INFO] Existence checking repository: " + rangeSamples.get(sampleIndex).ApiUrl);
+            System.out.println("[INFO] Existence checking repository: " + rangeSamples.get(sampleIndex).apiUrl);
 
             HttpRequest httpRequest = HttpRequest
                     .newBuilder()
-                    .uri(URI.create(rangeSamples.get(sampleIndex).ApiUrl))
+                    .uri(URI.create(rangeSamples.get(sampleIndex).apiUrl))
                     .setHeader("Authorization", "token " + authorizationHeader)
                     .build();
 
@@ -306,8 +305,8 @@ public class Main
 
     static void writeSamplesToFile(List<Sample> samples)
     {
-        // Write samples to file samples-{lang}.txt.
-        String fileName = "samples-" + CLIArguments.language.toLowerCase() + ".txt";
+        // Write samples to file samples-{lang}-{nbrOfSamples}.txt.
+        String fileName = "samples-" + CLIArguments.language.toLowerCase() + "-" + CLIArguments.numberOfSamples + ".txt";
         try (FileWriter writer = new FileWriter(fileName))
         {
             System.out.println("[INFO] Writing samples to file " + fileName);
@@ -331,8 +330,9 @@ public class Main
         samplesHash = stringBuilder.toString().hashCode();
     }
 
-    static void printSamplesInfo(List<Sample> samples)
+    static void writeMetaDataToFile(List<Sample> samples)
     {
+        String meta = "";
         if (!samples.isEmpty())
         {
             int max = 0;
@@ -342,12 +342,25 @@ public class Main
                 if (sample.numberOfStars < min) min = sample.numberOfStars;
                 if (sample.numberOfStars > max) max = sample.numberOfStars;
             }
-            System.out.println("\nSamples info:\n" +
+            meta = "Meta:\n" +
                     "* Max number of stars: " + max + "\n" +
                     "* Min number of stars: " + min + "\n" +
                     "* Total size of repositories if cloned: " + totalSamplesSizeInMegaBytes + " Megabytes, " +
                     totalSamplesSizeInMegaBytes / 1000 + " Gigabytes\n" +
-                    "* Samples hash: " + samplesHash);
+                    "* Samples hash: " + samplesHash;
         }
+        // Write samples info to file meta-{lang}-{nbrOfSamples}.txt.
+        String fileName = "meta-" + CLIArguments.language.toLowerCase() + "-" + CLIArguments.numberOfSamples + ".txt";
+        try (FileWriter writer = new FileWriter(fileName))
+        {
+            System.out.println("[INFO] Writing samples meta to file " + fileName);
+            writer.write(meta);
+        }
+        catch (IOException e)
+        {
+            System.err.println(e.getMessage());
+        }
+
+        System.out.println("\n" + meta);
     }
 }
