@@ -4,7 +4,7 @@
 
 ## Requirements
 
-* Java 1.8+
+* Java 13+
 * A data dump or remote connection to a GHTorrent PSQL DB
 
 ## Get Started
@@ -29,12 +29,15 @@ The query is stuck? Probably not, it's just large tables and a huge join.
 
 Why is this needed? This "staging" table improves the performance significantly.
 
-### Configure `psql.properties`
+### Configure `ghtorrent-sampler.properties`
 ```
-url=jdbc:postgresql://localhost/ghtorrent_restore
-user=myusername
-password=mypassword
+psql.url=jdbc:postgresql://localhost/ghtorrent_restore
+psql.user=mydbusername
+psql.password=mydbpassword
+github.authorization-token=mygithubtoken
 ```
+
+`github.authorization-token` can be generated here: https://github.com/settings/tokens
 
 ### Build
 ```
@@ -42,8 +45,18 @@ mvn package
 ```
 
 ### Run
+
+#### Create file with all the samples clone urls
 ```
 java -jar ghtorrent-sampler.jar --lang C++ --nbr-of-ranges 25 --tot-nbr-of-samples 1000 --seed 1234
+```
+
+#### Clone all samples
+
+**WARNING:** Make sure that you have enough space on your disk before you clone all repositories. The total size if all repositories would be cloned can be found in the output.
+
+```
+cat samples-{lang}.txt | xargs -n1 git clone
 ```
 
 ## Arguments
@@ -52,25 +65,28 @@ java -jar ghtorrent-sampler.jar --lang C++ --nbr-of-ranges 25 --tot-nbr-of-sampl
 --lang <String>, the language that ghtorrent-sampler filters all repositories on.
 --nbr-of-ranges <Int>, the number of star ranges that you want to sample from.
 --tot-nbr-of-samples <Int>, the total number of samples.
---seed <long>, use if you want to replicate the results.
+--seed <long>, use if you want to try to replicate the results.
 ```
+
+## Replicate Samples
+
+To replicate previous sampling: use the same  `--seed` argument and validate that the exact same repositories where found with the "Samples hash" found in the output. The hash needs to be checked because some repositories might have been deleted from GitHub since last run, which will result in different samples even if the same `--seed` argument has been used.
 
 ## Example Output
 
 ```
-Running with arguments: 
+Sampling with arguments: 
 * Language: C++
-* Number of samples: 321
-* Number of ranges: 5
-* Number of samples per range: 64
-* Seed: 1234
+* Number of samples: 1000
+* Number of ranges: 10
+* Number of samples per range: 100
+* Seed: 2910
 
-[INFO] Looking for samples in range: 0-65436 (MAX: 327180) Progress: 0%
-[INFO] Looking for samples in range: 65436-130872 (MAX: 327180) Progress: 25%
-[INFO] Looking for samples in range: 130872-196308 (MAX: 327180) Progress: 50%
-[INFO] Looking for samples in range: 196308-261744 (MAX: 327180) Progress: 75%
-[INFO] Looking for samples in range: 261744-327180 (MAX: 327180) Progress: 100%
-[INFO] Writing samples to file samples.txt.
+{...}
 
-Sample statistics, Max number of stars: 935 Min number of stars: 0
+Samples info:
+* Max number of stars: 1056
+* Min number of stars: 0
+* Total size of repositories if cloned: 39616.48299999995 Megabytes, 39.61648299999995 Gigabytes
+* Samples hash: -1083826755
 ```
