@@ -303,6 +303,15 @@ public class Main
         return validSamples;
     }
 
+    static void calculateSamplesHash(List<Sample> samples)
+    {
+        StringBuilder stringBuilder = new StringBuilder();
+        for (Sample sample : samples) {
+            stringBuilder.append(sample);
+        }
+        samplesHash = stringBuilder.toString().hashCode();
+    }
+
     static void writeSamplesToFile(List<Sample> samples)
     {
         // Write samples to file samples-{lang}-{nbrOfSamples}.txt.
@@ -319,15 +328,6 @@ public class Main
         {
             System.err.println(e.getMessage());
         }
-    }
-
-    static void calculateSamplesHash(List<Sample> samples)
-    {
-        StringBuilder stringBuilder = new StringBuilder();
-        for (Sample sample : samples) {
-            stringBuilder.append(sample);
-        }
-        samplesHash = stringBuilder.toString().hashCode();
     }
 
     static void writeMetaDataToFile(List<Sample> samples)
