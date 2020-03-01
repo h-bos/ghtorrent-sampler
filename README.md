@@ -53,7 +53,7 @@ java -jar ghtorrent-sampler.jar --lang C++ --nbr-of-ranges 25 --tot-nbr-of-sampl
 
 #### Clone all samples
 
-**WARNING:** Make sure that you have enough space on your disk before you clone all repositories. The total size if all repositories would be cloned can be found in the output.
+**WARNING:** Make sure that you have enough space on your disk before you clone all repositories. The total size of all repositories would be cloned can be found in the output.
 
 ```
 cat samples-{lang}.txt | xargs -n1 git clone
