@@ -63,9 +63,15 @@ cat samples-{lang}.txt | xargs -n1 git clone
 
 ```
 --lang <String>, the language that ghtorrent-sampler filters all repositories on.
+<<<<<<< HEAD
 --nbr-of-ranges <Int>, the number of star ranges that you want to sample from.
 --tot-nbr-of-samples <Int>, the total number of samples.
 --seed <long>, use if you want to try to replicate the results.
+=======
+--nbr-of-ranges <int>, the number of star ranges that you want to sample from.
+--tot-nbr-of-samples <int>, the total number of samples.
+--seed <long>, use if you want to replicate the results.
+>>>>>>> 625c9d15a0ad894af14b81df93fd4f6840e2a6f9
 ```
 
 ## Replicate Samples
