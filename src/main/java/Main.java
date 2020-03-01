@@ -30,14 +30,14 @@ public class Main
         }
     }
 
-    static class Sample
+    static class RepositorySample
     {
         String apiUrl;
         String cloneUrl;
 
         int numberOfStars;
 
-        Sample(String apiUrl, int numberOfStars)
+        RepositorySample(String apiUrl, int numberOfStars)
         {
             this.apiUrl = apiUrl;
             this.numberOfStars = numberOfStars;
@@ -49,7 +49,7 @@ public class Main
     static HttpClient httpClient;
     static String authorizationHeader;
 
-    static double totalSamplesSizeInMegaBytes = 0;
+    static double totalSamplesSizeInKiloBytes = 0;
     static int totalNumberOfValidSamplesFound = 0;
     static int samplesHash = 0;
 
@@ -154,10 +154,10 @@ public class Main
         preparedStatement.setString(1, CLIArguments.language);
         ResultSet resultSet = preparedStatement.executeQuery();
         int numberOfRepositories = 0;
-        List<Sample> repositoryPopulation = new ArrayList<>();
+        List<RepositorySample> repositoryPopulation = new ArrayList<>();
         while (resultSet.next())
         {
-            repositoryPopulation.add(new Sample(resultSet.getString(1), resultSet.getInt(3)));
+            repositoryPopulation.add(new RepositorySample(resultSet.getString(1), resultSet.getInt(3)));
             numberOfRepositories++;
         }
         int numberOfRepositoriesPerRange = numberOfRepositories / CLIArguments.numberOfRanges;
@@ -170,17 +170,17 @@ public class Main
         for (int i = 0; i < CLIArguments.numberOfRanges; i++)
             rangeRNGs.add(new Random(rng.nextLong()));
 
-        List<Sample> repositorySamples = new ArrayList<>();
+        List<RepositorySample> repositorySamples = new ArrayList<>();
 
         // For each repository range, pick {--tot-nbr-of-samples}/{--nbr-of-ranges} random repositories that exist according to the GitHub API.
         for (int rangeIndex = 0; rangeIndex < CLIArguments.numberOfRanges; rangeIndex++)
         {
             // Create list of repositories from the current range
-            List<Sample> repositorySamplesFromCurrentRange = repositoryPopulation.subList(rangeIndex * numberOfRepositoriesPerRange, (rangeIndex + 1) * numberOfRepositoriesPerRange);
+            List<RepositorySample> repositorySamplesFromCurrentRange = repositoryPopulation.subList(rangeIndex * numberOfRepositoriesPerRange, (rangeIndex + 1) * numberOfRepositoriesPerRange);
             // Shuffle a given range with its RNG
             Collections.shuffle(repositorySamplesFromCurrentRange, rangeRNGs.get(rangeIndex));
             // Pick repositories that exists from range
-            List<Sample> repositorySamplesFromRangeThatExist = pickExistingRepositorySamplesFromRange(repositorySamplesFromCurrentRange, CLIArguments.numberOfSamplesPerRange());
+            List<RepositorySample> repositorySamplesFromRangeThatExist = pickExistingRepositorySamplesFromRange(repositorySamplesFromCurrentRange, CLIArguments.numberOfSamplesPerRange());
             // If not enough existing repositories could be found in range
             if (repositorySamplesFromRangeThatExist == null)
             {
@@ -198,17 +198,16 @@ public class Main
 
     // Some samples will return 404 from the github API because they have been deleted. To avoid adding deleted
     // repositories to the output, we check if the repositories exist before we add them to the final list of samples.
-    static List<Sample> pickExistingRepositorySamplesFromRange(List<Sample> rangeSamples, int numberOfSamples) throws IOException, InterruptedException {
-        List<Sample> validSamples = new ArrayList<>();
-        int numberOfValidSamplesFound = 0;
-        int sampleIndex = 0;
-        while (sampleIndex < rangeSamples.size() && numberOfValidSamplesFound < numberOfSamples)
+    static List<RepositorySample> pickExistingRepositorySamplesFromRange(List<RepositorySample> rangeRepositorySamples, int numberOfRepositories) throws IOException, InterruptedException {
+        List<RepositorySample> foundExistingRepositorySamples = new ArrayList<>();
+        int numberOfExistingRepositoriesFound = 0;
+        int repositoryIndex = 0;
+        while (repositoryIndex < rangeRepositorySamples.size() && numberOfExistingRepositoriesFound <  numberOfRepositories)
         {
-            System.out.println("[INFO] Existence checking repository: " + rangeSamples.get(sampleIndex).apiUrl);
 
             HttpRequest httpRequest = HttpRequest
                     .newBuilder()
-                    .uri(URI.create(rangeSamples.get(sampleIndex).apiUrl))
+                    .uri(URI.create(rangeRepositorySamples.get(repositoryIndex).apiUrl))
                     .setHeader("Authorization", "token " + authorizationHeader)
                     .build();
 
@@ -217,7 +216,7 @@ public class Main
 
             // Handle GitHub rate limiting
             long rateLimitRemaining = Long.parseLong(response.headers().firstValue("X-RateLimit-Remaining").get());
-            System.out.println("[INFO] Current rate limit: " + rateLimitRemaining);
+            System.out.println("[INFO] Current GitHub rate limit: " + rateLimitRemaining);
             if (rateLimitRemaining == 0)
             {
                 long rateLimitReset = Long.parseLong(response.headers().firstValue("X-RateLimit-Reset").get());
@@ -235,9 +234,12 @@ public class Main
             // If the repository doesn't exist we'll get a status code that is not 200.
             if (response.statusCode() != 200)
             {
-                sampleIndex++;
+                System.out.println("[INFO] Repository missing ✘ " + rangeRepositorySamples.get(repositoryIndex).apiUrl);
+                repositoryIndex++;
                 continue;
             }
+
+            System.out.println("[INFO] Repository found ✓ " + rangeRepositorySamples.get(repositoryIndex).apiUrl);
 
             // Find clone_url value in the JSON response body
             String jsonBody = response.body();
@@ -251,50 +253,50 @@ public class Main
                 Map.Entry<String, JsonNode> node = nodeIterator.next();
                 if (node.getKey() == "clone_url")
                 {
-                    Sample validSample = rangeSamples.get(sampleIndex);
-                    validSample.cloneUrl = node.getValue().asText();
-                    validSamples.add(validSample);
+                    RepositorySample validRepositorySample = rangeRepositorySamples.get(repositoryIndex);
+                    validRepositorySample.cloneUrl = node.getValue().asText();
+                    foundExistingRepositorySamples.add(validRepositorySample);
                     foundCloneUrl = true;
                 } else if (node.getKey() == "size") {
-                    totalSamplesSizeInMegaBytes += node.getValue().asInt() / 1000.0;
+                    totalSamplesSizeInKiloBytes += node.getValue().asInt();
                     foundRepositorySize = true;
                 }
             }
 
-            sampleIndex++;
-            numberOfValidSamplesFound++;
+            repositoryIndex++;
+            numberOfExistingRepositoriesFound++;
 
             System.out.println("[INFO] Samples found: " + ++totalNumberOfValidSamplesFound + " out of " + CLIArguments.numberOfSamples);
         }
 
         // If the range is exhausted
-        if (numberOfValidSamplesFound < CLIArguments.numberOfSamplesPerRange())
+        if (numberOfExistingRepositoriesFound < CLIArguments.numberOfSamplesPerRange())
         {
             return null;
         }
 
-        return validSamples;
+        return foundExistingRepositorySamples;
     }
 
-    static void calculateSamplesHash(List<Sample> samples)
+    static void calculateSamplesHash(List<RepositorySample> repositorySamples)
     {
         StringBuilder stringBuilder = new StringBuilder();
-        for (Sample sample : samples) {
-            stringBuilder.append(sample);
+        for (RepositorySample repositorySample : repositorySamples) {
+            stringBuilder.append(repositorySample);
         }
         samplesHash = stringBuilder.toString().hashCode();
     }
 
-    static void writeRepositorySamplesCloneUrlsToFile(List<Sample> samples)
+    static void writeRepositorySamplesCloneUrlsToFile(List<RepositorySample> repositorySamples)
     {
         // Write samples to file samples-{lang}-{nbrOfSamples}.txt.
         String fileName = "samples-" + CLIArguments.language.toLowerCase() + "-" + CLIArguments.numberOfSamples + ".txt";
         try (FileWriter writer = new FileWriter(fileName))
         {
             System.out.println("[INFO] Writing samples to file " + fileName);
-            for (Sample sample : samples)
+            for (RepositorySample repositorySample : repositorySamples)
             {
-                writer.write(sample.cloneUrl + "\n");
+                writer.write(repositorySample.cloneUrl + "\n");
             }
         }
         catch (IOException e)
@@ -303,23 +305,23 @@ public class Main
         }
     }
 
-    static void writeRepositorySamplesMetaDataToFile(List<Sample> samples)
+    static void writeRepositorySamplesMetaDataToFile(List<RepositorySample> repositorySamples)
     {
         String meta = "";
-        if (!samples.isEmpty())
+        if (!repositorySamples.isEmpty())
         {
             int max = 0;
             int min = 0;
-            for (Sample sample : samples)
+            for (RepositorySample repositorySample : repositorySamples)
             {
-                if (sample.numberOfStars < min) min = sample.numberOfStars;
-                if (sample.numberOfStars > max) max = sample.numberOfStars;
+                if (repositorySample.numberOfStars < min) min = repositorySample.numberOfStars;
+                if (repositorySample.numberOfStars > max) max = repositorySample.numberOfStars;
             }
             meta = "Meta:\n" +
                     "* Max number of stars: " + max + "\n" +
                     "* Min number of stars: " + min + "\n" +
-                    "* Total size of repositories if cloned: " + totalSamplesSizeInMegaBytes + " Megabytes, " +
-                    totalSamplesSizeInMegaBytes / 1000 + " Gigabytes\n" +
+                    "* Total size of repositories if cloned: " + totalSamplesSizeInKiloBytes / 1000 + " Megabytes, " +
+                    totalSamplesSizeInKiloBytes / 1000000 + " Gigabytes\n" +
                     "* Samples hash: " + samplesHash;
         }
         // Write samples info to file meta-{lang}-{nbrOfSamples}.txt.
