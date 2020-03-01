@@ -149,7 +149,7 @@ public class Main
     }
 
     static void sampleRepositories(Connection connection, CLIArguments CLIArguments) throws SQLException, IOException, InterruptedException {
-        // Find the number of repositories
+        // Find repository population
         PreparedStatement preparedStatement = connection.prepareStatement("SELECT * FROM project_samples WHERE language=? ORDER by nbr_of_stars");
         preparedStatement.setString(1, CLIArguments.language);
         ResultSet resultSet = preparedStatement.executeQuery();
@@ -171,13 +171,17 @@ public class Main
             rangeRNGs.add(new Random(rng.nextLong()));
 
         List<Sample> repositorySamples = new ArrayList<>();
+
+        // For each repository range, pick {--tot-nbr-of-samples}/{--nbr-of-ranges} random repositories that exist according to the GitHub API.
         for (int rangeIndex = 0; rangeIndex < CLIArguments.numberOfRanges; rangeIndex++)
         {
+            // Create list of repositories from the current range
             List<Sample> repositorySamplesFromCurrentRange = repositoryPopulation.subList(rangeIndex * numberOfRepositoriesPerRange, (rangeIndex + 1) * numberOfRepositoriesPerRange);
-            // Shuffle a given range with its RNG.
+            // Shuffle a given range with its RNG
             Collections.shuffle(repositorySamplesFromCurrentRange, rangeRNGs.get(rangeIndex));
             // Pick repositories that exists from range
             List<Sample> repositorySamplesFromRangeThatExist = pickExistingRepositorySamplesFromRange(repositorySamplesFromCurrentRange, CLIArguments.numberOfSamplesPerRange());
+            // If not enough existing repositories could be found in range
             if (repositorySamplesFromRangeThatExist == null)
             {
                 System.out.println("[ERROR] not enough valid samples where found in range. " +
@@ -188,8 +192,8 @@ public class Main
         }
 
         calculateSamplesHash(repositorySamples);
-        writeSamplesToFile(repositorySamples);
-        writeMetaDataToFile(repositorySamples);
+        writeRepositorySamplesCloneUrlsToFile(repositorySamples);
+        writeRepositorySamplesMetaDataToFile(repositorySamples);
     }
 
     // Some samples will return 404 from the github API because they have been deleted. To avoid adding deleted
@@ -281,7 +285,7 @@ public class Main
         samplesHash = stringBuilder.toString().hashCode();
     }
 
-    static void writeSamplesToFile(List<Sample> samples)
+    static void writeRepositorySamplesCloneUrlsToFile(List<Sample> samples)
     {
         // Write samples to file samples-{lang}-{nbrOfSamples}.txt.
         String fileName = "samples-" + CLIArguments.language.toLowerCase() + "-" + CLIArguments.numberOfSamples + ".txt";
@@ -299,7 +303,7 @@ public class Main
         }
     }
 
-    static void writeMetaDataToFile(List<Sample> samples)
+    static void writeRepositorySamplesMetaDataToFile(List<Sample> samples)
     {
         String meta = "";
         if (!samples.isEmpty())
