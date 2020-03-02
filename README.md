@@ -53,7 +53,7 @@ java -jar ghtorrent-sampler.jar --lang C++ --nbr-of-ranges 25 --tot-nbr-of-sampl
 The total size of all repositories when cloned can be found in the output.
 
 ```
-# Ex. samples-java-1000.txt | xargs -n1 git clone
+# Ex. samples-java-1000.txt | xargs -L1 git clone
 cat samples-{lang}-{nbrOfSamples}.txt | xargs -L1 git clone
 ```
 
