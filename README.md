@@ -54,7 +54,7 @@ The total size of all repositories when cloned can be found in the output.
 
 ```
 # Ex. samples-java-1000.txt | xargs -n1 git clone
-cat samples-{lang}-{nbrOfSamples}.txt | xargs -n1 git clone
+cat samples-{lang}-{nbrOfSamples}.txt | xargs -L1 git clone
 ```
 
 ## Arguments
