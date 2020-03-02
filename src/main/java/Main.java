@@ -278,7 +278,10 @@ public class Main
             System.out.println("[INFO] Writing samples to file " + fileName);
             for (RepositorySample repositorySample : repositorySamples)
             {
-                writer.write(repositorySample.cloneUrl + "\n");
+                String[] cloneUrlParts = repositorySample.cloneUrl.split("/");
+                // uniqueRepositoryName='{username}-{repositoryName}'
+                String uniqueRepositoryName = cloneUrlParts [3] + "-" + cloneUrlParts[4].split("\\.")[0];
+                writer.write(repositorySample.cloneUrl + " " + uniqueRepositoryName + "\n");
             }
         }
         catch (IOException e)
