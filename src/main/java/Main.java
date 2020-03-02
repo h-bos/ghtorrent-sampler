@@ -184,7 +184,7 @@ public class Main
         List<RepositorySample> foundExistingRepositorySamples = new ArrayList<>();
         int numberOfExistingRepositoriesFound = 0;
         int repositoryIndex = 0;
-        while (repositoryIndex < rangeRepositorySamples.size() && numberOfExistingRepositoriesFound <  numberOfRepositories)
+        while (repositoryIndex < rangeRepositorySamples.size() && numberOfExistingRepositoriesFound < numberOfRepositories)
         {
 
             HttpRequest httpRequest = HttpRequest
