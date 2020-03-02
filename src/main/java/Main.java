@@ -2,7 +2,6 @@ import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -26,7 +25,7 @@ public class Main
 
         static int numberOfSamplesPerRange()
         {
-            return CLIArguments.numberOfSamples / CLIArguments.numberOfRanges;
+            return cliArguments.numberOfSamples / cliArguments.numberOfRanges;
         }
     }
 
@@ -44,7 +43,7 @@ public class Main
         }
     }
 
-    static CLIArguments CLIArguments = new CLIArguments();
+    static CLIArguments cliArguments = new CLIArguments();
 
     static HttpClient httpClient;
     static String authorizationHeader;
@@ -64,16 +63,16 @@ public class Main
             switch (args[i])
             {
                 case "--lang":
-                    CLIArguments.language = args[i+1];
+                    cliArguments.language = args[i+1];
                     break;
                 case "--nbr-of-ranges":
-                    CLIArguments.numberOfRanges = Integer.parseInt(args[i+1]);
+                    cliArguments.numberOfRanges = Integer.parseInt(args[i+1]);
                     break;
                 case "--tot-nbr-of-samples":
-                    CLIArguments.numberOfSamples = Integer.parseInt(args[i+1]);
+                    cliArguments.numberOfSamples = Integer.parseInt(args[i+1]);
                     break;
                 case "--seed":
-                    CLIArguments.seed = Long.parseLong(args[i+1]);
+                    cliArguments.seed = Long.parseLong(args[i+1]);
                     break;
                 default:
                     System.err.println("Invalid argument " + args[i]);
@@ -83,11 +82,11 @@ public class Main
 
         System.out.println(
                 "Sampling with arguments: \n" +
-                "* Language: "                      + CLIArguments.language + "\n" +
-                "* Number of samples: "             + CLIArguments.numberOfSamples + "\n" +
-                "* Number of ranges: "              + CLIArguments.numberOfRanges + "\n" +
-                "* Number of samples per range: "   + CLIArguments.numberOfSamplesPerRange() + "\n" +
-                "* Seed: "                          + CLIArguments.seed + "\n");
+                "* Language: "                      + cliArguments.language + "\n" +
+                "* Number of samples: "             + cliArguments.numberOfSamples + "\n" +
+                "* Number of ranges: "              + cliArguments.numberOfRanges + "\n" +
+                "* Number of samples per range: "   + cliArguments.numberOfSamplesPerRange() + "\n" +
+                "* Seed: "                          + cliArguments.seed + "\n");
 
         // Find properties
         Properties properties;
@@ -96,11 +95,6 @@ public class Main
             properties = new Properties();
             properties.load(input);
         }
-        catch (FileNotFoundException e)
-        {
-            System.err.println(e.getMessage());
-            return;
-        }
         catch (IOException e)
         {
             System.err.println(e.getMessage());
@@ -108,79 +102,67 @@ public class Main
         }
 
         // Connect to DB
-        Connection connection;
-        try
-        {
-            connection = DriverManager.getConnection(
+        try (Connection connection = DriverManager.getConnection
+                (
                     properties.getProperty("psql.url"),
                     properties.getProperty("psql.user"),
-                    properties.getProperty("psql.password"));
-        }
-        catch (SQLException e)
+                    properties.getProperty("psql.password")
+                )
+            )
         {
-            System.err.println(e.getMessage());
-            return;
+            // Initialize HTTP client
+            httpClient = HttpClient
+                    .newBuilder()
+                    .followRedirects(HttpClient.Redirect.ALWAYS)
+                    .build();
+
+            authorizationHeader = properties.get("github.authorization-token").toString();
+
+            sampleRepositories(connection, cliArguments);
         }
-
-        // Initialize HTTP client
-        httpClient = HttpClient
-                .newBuilder()
-                .followRedirects(HttpClient.Redirect.ALWAYS)
-                .build();
-
-        authorizationHeader = properties.get("github.authorization-token").toString();
-
-        // Sample repositories
-        try
+        catch (SQLException | InterruptedException | IOException e)
         {
-            sampleRepositories(connection, CLIArguments);
-        }
-        catch (SQLException e)
-        {
-            System.err.println(e.getMessage());
-            return;
-        } catch (InterruptedException e) {
-            System.err.println(e.getMessage());
-            return;
-        } catch (IOException e) {
             System.err.println(e.getMessage());
             return;
         }
     }
 
-    static void sampleRepositories(Connection connection, CLIArguments CLIArguments) throws SQLException, IOException, InterruptedException {
+    static void sampleRepositories(Connection connection, CLIArguments cliArguments) throws SQLException, IOException, InterruptedException {
         // Find repository population
-        PreparedStatement preparedStatement = connection.prepareStatement("SELECT * FROM project_samples WHERE language=? ORDER by nbr_of_stars");
-        preparedStatement.setString(1, CLIArguments.language);
-        ResultSet resultSet = preparedStatement.executeQuery();
-        int numberOfRepositories = 0;
         List<RepositorySample> repositoryPopulation = new ArrayList<>();
-        while (resultSet.next())
+        int numberOfRepositoriesPerRange = 0;
+        try (
+                PreparedStatement preparedStatement = connection.prepareStatement("SELECT * FROM project_samples WHERE language=? ORDER by nbr_of_stars");
+                ResultSet resultSet = preparedStatement.executeQuery();
+            )
         {
-            repositoryPopulation.add(new RepositorySample(resultSet.getString(1), resultSet.getInt(3)));
-            numberOfRepositories++;
+            preparedStatement.setString(1, cliArguments.language);
+            int numberOfRepositories = 0;
+            while (resultSet.next())
+            {
+                repositoryPopulation.add(new RepositorySample(resultSet.getString(1), resultSet.getInt(3)));
+                numberOfRepositories++;
+            }
+            numberOfRepositoriesPerRange = numberOfRepositories / cliArguments.numberOfRanges;
         }
-        int numberOfRepositoriesPerRange = numberOfRepositories / CLIArguments.numberOfRanges;
-        resultSet.close();
-        preparedStatement.close();
 
         // Create RNGs for each repository sample range
-        Random rng = new Random(CLIArguments.seed);
+        Random rng = new Random(cliArguments.seed);
         List<Random> rangeRNGs = new ArrayList<>();
-        for (int i = 0; i < CLIArguments.numberOfRanges; i++)
+        for (int i = 0; i < cliArguments.numberOfRanges; i++)
             rangeRNGs.add(new Random(rng.nextLong()));
 
         List<RepositorySample> repositorySamples = new ArrayList<>();
 
         // For each repository range, pick {--tot-nbr-of-samples}/{--nbr-of-ranges} random repositories that exist according to the GitHub API.
-        for (int rangeIndex = 0; rangeIndex < CLIArguments.numberOfRanges; rangeIndex++)
+        for (int rangeIndex = 0; rangeIndex < cliArguments.numberOfRanges; rangeIndex++)
         {
             // Create list of repositories from the current range
             List<RepositorySample> repositorySamplesFromCurrentRange = repositoryPopulation.subList(rangeIndex * numberOfRepositoriesPerRange, (rangeIndex + 1) * numberOfRepositoriesPerRange);
             // Shuffle a given range with its RNG
             Collections.shuffle(repositorySamplesFromCurrentRange, rangeRNGs.get(rangeIndex));
             // Pick repositories that exists from range
-            List<RepositorySample> repositorySamplesFromRangeThatExist = pickExistingRepositorySamplesFromRange(repositorySamplesFromCurrentRange, CLIArguments.numberOfSamplesPerRange());
+            List<RepositorySample> repositorySamplesFromRangeThatExist = pickExistingRepositorySamplesFromRange(repositorySamplesFromCurrentRange, cliArguments.numberOfSamplesPerRange());
             // If not enough existing repositories could be found in range
             if (repositorySamplesFromRangeThatExist == null)
             {
@@ -251,13 +233,13 @@ public class Main
             while (nodeIterator.hasNext() && (!foundCloneUrl || !foundRepositorySize))
             {
                 Map.Entry<String, JsonNode> node = nodeIterator.next();
-                if (node.getKey() == "clone_url")
+                if (node.getKey().equals("clone_url"))
                 {
                     RepositorySample validRepositorySample = rangeRepositorySamples.get(repositoryIndex);
                     validRepositorySample.cloneUrl = node.getValue().asText();
                     foundExistingRepositorySamples.add(validRepositorySample);
                     foundCloneUrl = true;
-                } else if (node.getKey() == "size") {
+                } else if (node.getKey().equals("size")) {
                     totalSamplesSizeInKiloBytes += node.getValue().asInt();
                     foundRepositorySize = true;
                 }
@@ -266,11 +248,11 @@ public class Main
             repositoryIndex++;
             numberOfExistingRepositoriesFound++;
 
-            System.out.println("[INFO] Samples found: " + ++totalNumberOfValidSamplesFound + " out of " + CLIArguments.numberOfSamples);
+            System.out.println("[INFO] Samples found: " + ++totalNumberOfValidSamplesFound + " out of " + cliArguments.numberOfSamples);
         }
 
         // If the range is exhausted
-        if (numberOfExistingRepositoriesFound < CLIArguments.numberOfSamplesPerRange())
+        if (numberOfExistingRepositoriesFound < cliArguments.numberOfSamplesPerRange())
         {
             return null;
         }
@@ -290,7 +272,7 @@ public class Main
     static void writeRepositorySamplesCloneUrlsToFile(List<RepositorySample> repositorySamples)
     {
         // Write samples to file samples-{lang}-{nbrOfSamples}.txt.
-        String fileName = "samples-" + CLIArguments.language.toLowerCase() + "-" + CLIArguments.numberOfSamples + ".txt";
+        String fileName = "samples-" + cliArguments.language.toLowerCase() + "-" + cliArguments.numberOfSamples + ".txt";
         try (FileWriter writer = new FileWriter(fileName))
         {
             System.out.println("[INFO] Writing samples to file " + fileName);
@@ -325,7 +307,7 @@ public class Main
                     "* Samples hash: " + samplesHash;
         }
         // Write samples info to file meta-{lang}-{nbrOfSamples}.txt.
-        String fileName = "meta-" + CLIArguments.language.toLowerCase() + "-" + CLIArguments.numberOfSamples + ".txt";
+        String fileName = "meta-" + cliArguments.language.toLowerCase() + "-" + cliArguments.numberOfSamples + ".txt";
         try (FileWriter writer = new FileWriter(fileName))
         {
             System.out.println("[INFO] Writing samples meta to file " + fileName);
@@ -334,6 +316,7 @@ public class Main
         catch (IOException e)
         {
             System.err.println(e.getMessage());
+            return;
         }
 
         System.out.println("\n" + meta);
