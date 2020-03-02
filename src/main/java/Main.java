@@ -97,7 +97,7 @@ public class Main
         }
         catch (IOException e)
         {
-            System.err.println(e.getMessage());
+            e.printStackTrace();
             return;
         }
 
@@ -122,7 +122,7 @@ public class Main
         }
         catch (SQLException | InterruptedException | IOException e)
         {
-            System.err.println(e.getMessage());
+            e.printStackTrace();
             return;
         }
     }
@@ -131,19 +131,19 @@ public class Main
         // Find repository population
         List<RepositorySample> repositoryPopulation = new ArrayList<>();
         int numberOfRepositoriesPerRange = 0;
-        try (
-                PreparedStatement preparedStatement = connection.prepareStatement("SELECT * FROM project_samples WHERE language=? ORDER by nbr_of_stars");
-                ResultSet resultSet = preparedStatement.executeQuery();
-            )
+        try (PreparedStatement preparedStatement = connection.prepareStatement("SELECT * FROM project_samples WHERE language=? ORDER by nbr_of_stars"))
         {
             preparedStatement.setString(1, cliArguments.language);
-            int numberOfRepositories = 0;
-            while (resultSet.next())
+            try (ResultSet resultSet = preparedStatement.executeQuery())
             {
-                repositoryPopulation.add(new RepositorySample(resultSet.getString(1), resultSet.getInt(3)));
-                numberOfRepositories++;
+                int numberOfRepositories = 0;
+                while (resultSet.next())
+                {
+                    repositoryPopulation.add(new RepositorySample(resultSet.getString(1), resultSet.getInt(3)));
+                    numberOfRepositories++;
+                }
+                numberOfRepositoriesPerRange = numberOfRepositories / cliArguments.numberOfRanges;
             }
-            numberOfRepositoriesPerRange = numberOfRepositories / cliArguments.numberOfRanges;
         }
 
         // Create RNGs for each repository sample range
@@ -216,12 +216,12 @@ public class Main
             // If the repository doesn't exist we'll get a status code that is not 200.
             if (response.statusCode() != 200)
             {
-                System.out.println("[INFO] Repository missing ✘ " + rangeRepositorySamples.get(repositoryIndex).apiUrl);
+                System.out.println("[INFO] Repository missing " + rangeRepositorySamples.get(repositoryIndex).apiUrl);
                 repositoryIndex++;
                 continue;
             }
 
-            System.out.println("[INFO] Repository found ✓ " + rangeRepositorySamples.get(repositoryIndex).apiUrl);
+            System.out.println("[INFO] Repository found " + rangeRepositorySamples.get(repositoryIndex).apiUrl);
 
             // Find clone_url value in the JSON response body
             String jsonBody = response.body();
@@ -283,7 +283,7 @@ public class Main
         }
         catch (IOException e)
         {
-            System.err.println(e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -315,7 +315,7 @@ public class Main
         }
         catch (IOException e)
         {
-            System.err.println(e.getMessage());
+            e.printStackTrace();
             return;
         }
 
