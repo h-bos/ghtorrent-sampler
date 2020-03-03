@@ -31,7 +31,7 @@
                             <archive>
                                 <manifest>
                                     <mainClass>
-                                        Main
+                                        io.hbp.com.Main
                                     </mainClass>
                                 </manifest>
                             </archive>
