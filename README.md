@@ -47,14 +47,25 @@ mvn package
 java -jar ghtorrent-sampler.jar --lang C++ --nbr-of-ranges 25 --tot-nbr-of-samples 1000 --seed 1234
 ```
 
-#### Clone all samples
+#### Clone All Repositories
 
-**WARNING:** Make sure that you have enough space on your disk before you clone all repositories. 
-The total size of all repositories when cloned can be found in the output.
+**!WARNING!**: The total size can be large. Make sure you have enough space on your disk before cloning all repositories. The total size can be found in the metadata or log file.
+```
+cp {target}/samples-java-1000.txt .
+mkdir repositories && cd repositories 
+# Ex. samples-java-1000.txt | xargs -L1 git clone
+<../samples-{lang}-{nbrOfSamples}.txt | xargs -L1 git clone
+```
+
+#### Clone All Repositories Source Files Only
+
+**!WARNING!**: This command deletes files permanently. Read command carefully before using. 
 
 ```
-# Ex. samples-java-1000.txt | xargs -L1 git clone
-cat samples-{lang}-{nbrOfSamples}.txt | xargs -L1 git clone
+cp {target}/samples-java-1000.txt .
+mkdir repositories && cd repositories 
+# Ex. <../samples-java-1000.txt xargs -d $'\n' sh -c 'for arg do git clone $arg; find . -type f ! -name '*.java' -delete; done'
+<../samples-{lang}-{nbrOfSamples}.txt xargs -d $'\n' sh -c 'for arg do git clone $arg; find . -type f ! -name '*.{fileEnding}' -delete; done'
 ```
 
 ## Arguments

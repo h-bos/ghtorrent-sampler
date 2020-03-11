@@ -18,34 +18,7 @@ import java.util.Date;
 
 public class Main
 {
-    static class CLIArguments
-    {
-        String language;
-        int numberOfSamples;
-        int numberOfRanges;
-        long seed;
-
-        static int numberOfSamplesPerRange()
-        {
-            return cliArguments.numberOfSamples / cliArguments.numberOfRanges;
-        }
-    }
-
-    static class RepositorySample
-    {
-        String apiUrl;
-        String cloneUrl;
-
-        int numberOfStars;
-
-        RepositorySample(String apiUrl, int numberOfStars)
-        {
-            this.apiUrl = apiUrl;
-            this.numberOfStars = numberOfStars;
-        }
-    }
-
-    static CLIArguments cliArguments = new CLIArguments();
+    static CliArguments cliArguments = new CliArguments();
 
     static HttpClient httpClient;
     static String authorizationHeader;
@@ -81,14 +54,6 @@ public class Main
                     return;
             }
         }
-
-        System.out.println(
-                "Sampling with arguments: \n" +
-                "* Language: "                      + cliArguments.language + "\n" +
-                "* Number of samples: "             + cliArguments.numberOfSamples + "\n" +
-                "* Number of ranges: "              + cliArguments.numberOfRanges + "\n" +
-                "* Number of samples per range: "   + cliArguments.numberOfSamplesPerRange() + "\n" +
-                "* Seed: "                          + cliArguments.seed + "\n");
 
         // Find properties
         Properties properties;
@@ -129,7 +94,7 @@ public class Main
         }
     }
 
-    static void sampleRepositories(Connection connection, CLIArguments cliArguments) throws SQLException, IOException, InterruptedException {
+    static void sampleRepositories(Connection connection, CliArguments cliArguments) throws SQLException, IOException, InterruptedException {
         // Find repository population
         List<RepositorySample> repositoryPopulation = new ArrayList<>();
         int numberOfRepositoriesPerRange = 0;
@@ -168,8 +133,7 @@ public class Main
             // If not enough existing repositories could be found in range
             if (repositorySamplesFromRangeThatExist == null)
             {
-                System.out.println("[ERROR] not enough valid samples where found in range. " +
-                        "Please decrease the range amount or the samples amount and try again.");
+                Log.error("not enough valid samples where found in range. Please decrease the range amount or the samples amount and try again.");
                 return;
             }
             repositorySamples.addAll(repositorySamplesFromRangeThatExist);
@@ -178,6 +142,7 @@ public class Main
         calculateSamplesHash(repositorySamples);
         writeRepositorySamplesCloneUrlsToFile(repositorySamples);
         writeRepositorySamplesMetaDataToFile(repositorySamples);
+        Log.writeToFile("log-" + cliArguments.language.toLowerCase() + "-" + cliArguments.numberOfSamples + ".txt");
     }
 
     // Some samples will return 404 from the github API because they have been deleted. To avoid adding deleted
@@ -200,30 +165,38 @@ public class Main
 
             // Handle GitHub rate limiting
             long rateLimitRemaining = Long.parseLong(response.headers().firstValue("X-RateLimit-Remaining").get());
-            System.out.println("[INFO] Current GitHub rate limit: " + rateLimitRemaining);
+            Log.info("Current GitHub rate limit: " + rateLimitRemaining);
+            long rateLimitReset = Long.parseLong(response.headers().firstValue("X-RateLimit-Reset").get());
+            long rateLimitResetsAt = rateLimitReset * 1000;
+            Log.info("Current rate limit reset: " + new Date(rateLimitResetsAt));
             if (rateLimitRemaining == 0)
             {
-                long rateLimitReset = Long.parseLong(response.headers().firstValue("X-RateLimit-Reset").get());
-                long rateLimitResetsAt = rateLimitReset * 1000;
                 long deltaTime = rateLimitResetsAt - System.currentTimeMillis();
                 Date timingOutUntil = Date.from(Instant.now().plusMillis(deltaTime));
-                System.out.println("[INFO] GitHub rate limit reached. Timing out until " + timingOutUntil);
+                Log.info("GitHub rate limit reached. Timing out until " + timingOutUntil);
                 synchronized (waitObject)
                 {
-                    waitObject.wait(deltaTime);
+                    if (deltaTime > 0)
+                    {
+                        // 2 minutes buffer time.
+                        waitObject.wait(deltaTime + 2 * 60000);
+                    }
                 }
                 continue;
             }
 
+            int rangeMax = rangeRepositorySamples.stream().mapToInt(x -> x.numberOfStars).max().getAsInt();
+            int rangeMin = rangeRepositorySamples.stream().mapToInt(x -> x.numberOfStars).min().getAsInt();
+
+            Log.info("Looking for repository in range: " + rangeMin + "-" + rangeMax);
+
             // If the repository doesn't exist we'll get a status code that is not 200.
             if (response.statusCode() != 200)
             {
-                System.out.println("[INFO] Repository missing " + rangeRepositorySamples.get(repositoryIndex).apiUrl);
+                Log.info("Repository missing " + rangeRepositorySamples.get(repositoryIndex));
                 repositoryIndex++;
                 continue;
             }
-
-            System.out.println("[INFO] Repository found " + rangeRepositorySamples.get(repositoryIndex).apiUrl);
 
             // Find clone_url value in the JSON response body
             String jsonBody = response.body();
@@ -241,16 +214,20 @@ public class Main
                     validRepositorySample.cloneUrl = node.getValue().asText();
                     foundExistingRepositorySamples.add(validRepositorySample);
                     foundCloneUrl = true;
-                } else if (node.getKey().equals("size")) {
+                }
+                else if (node.getKey().equals("size"))
+                {
                     totalSamplesSizeInKiloBytes += node.getValue().asInt();
                     foundRepositorySize = true;
                 }
             }
 
+            Log.info("Repository found " + rangeRepositorySamples.get(repositoryIndex));
+
             repositoryIndex++;
             numberOfExistingRepositoriesFound++;
 
-            System.out.println("[INFO] Samples found: " + ++totalNumberOfValidSamplesFound + " out of " + cliArguments.numberOfSamples);
+            Log.info("Samples found: " + ++totalNumberOfValidSamplesFound + " out of " + cliArguments.numberOfSamples);
         }
 
         // If the range is exhausted
@@ -277,7 +254,7 @@ public class Main
         String fileName = "samples-" + cliArguments.language.toLowerCase() + "-" + cliArguments.numberOfSamples + ".txt";
         try (FileWriter writer = new FileWriter(fileName))
         {
-            System.out.println("[INFO] Writing samples to file " + fileName);
+            Log.info("Writing samples to file " + fileName);
             for (RepositorySample repositorySample : repositorySamples)
             {
                 String[] cloneUrlParts = repositorySample.cloneUrl.split("/");
@@ -305,6 +282,11 @@ public class Main
                 if (repositorySample.numberOfStars > max) max = repositorySample.numberOfStars;
             }
             meta = "Meta:\n" +
+                    "* Language: " + cliArguments.language + "\n" +
+                    "* Number of samples: " + cliArguments.numberOfSamples + "\n" +
+                    "* Number of ranges: " + cliArguments.numberOfRanges + "\n" +
+                    "* Number of samples per range: " + cliArguments.numberOfSamplesPerRange() + "\n" +
+                    "* Seed: " + cliArguments.seed + "\n" +
                     "* Max number of stars: " + max + "\n" +
                     "* Min number of stars: " + min + "\n" +
                     "* Total size of repositories if cloned: " + totalSamplesSizeInKiloBytes / 1000 + " Megabytes, " +
@@ -315,7 +297,8 @@ public class Main
         String fileName = "meta-" + cliArguments.language.toLowerCase() + "-" + cliArguments.numberOfSamples + ".txt";
         try (FileWriter writer = new FileWriter(fileName))
         {
-            System.out.println("[INFO] Writing samples meta to file " + fileName);
+            Log.info("Writing samples meta to file " + fileName);
+            Log.info(meta);
             writer.write(meta);
         }
         catch (IOException e)
@@ -323,7 +306,5 @@ public class Main
             e.printStackTrace();
             return;
         }
-
-        System.out.println("\n" + meta);
     }
 }
